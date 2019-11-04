@@ -13,10 +13,41 @@ Not all features by KPP are supported and model code generated adheres to Julia 
 ## Feature description
 TBD
 
+## Differences from legacy KPP-generated code
+Generated code is a full time-stepped model `jlkpp_MECHANISM_NAME` which performs time-stepping from start to end solving chemical kinetic equations step-by-step until completion.
+
+* Variables are not handled in a global scope like in FORTRAN (COMMON blocks).
+
+* Legacy parameters such as `TEMP`, `CFACTOR` and `SUN` have their replacement Julia routines / hard-coded shims for compatibility.
+
+* Legacy rate functions such as `FALL`, `ARR`, `EP2` have hard-coded Julia version shims for compatibility. Currently functions for rate coefficients require work directly modifying `KPP.jl`. Submit an issue if you want to work on this.
+
+* Debug IO: Using `JLD.jl`, a Julia-native format variant of HDF5 is used to save out debug output at specific time intervals **defined at pre-processor generation time**. It is fixed to discourage production use and only used for easy debugging of outputs.
+
+* Extensibility is made possible by providing clear code points to implement other processes and a main non-KPP specific time stepping loop.
+
 ## Unsupported features (caveats)
 The following features are **currently unsupported** in `KPP.jl` and will be implemented as infrastructure is ready.
 
 * Fixed species (e.g. `O2` or generic species like `M`). Their concentrations are not fixed in internal solver time-steps and are currently re-set with a kludge at every model time-step.
 
+* As a result of the above, `#DEFVAR`, `#DEFFIX` may not behave as expected.
+
+* Mass balance checks via chemical atoms (when defined via `.spc` files, e.g. `PAN		= 2C + 3H + 5O + N;`) is unsupported.
+
+* The integrator option e.g. `#INTEGRATOR rodas4` is ignored; `DifferentialEquations.jl` is used with algorithm hinting `alg_hints = [:stiff]` by default.
+
 ## Deprecated features
 The following features are **deprecated** and will remain indefinitely unsupported.
+
+* The `#DRIVER` option specifying the language version is obviously unsupported. All code will be Julia code.
+
+* The `#MONITOR` option to choose output species. The generated model does NOT contain production IO functionality. Users are encouraged to implement their own.
+
+## Dependencies
+We acknowledge the authors of the following packages (and Julia itself!) without which `KPP.jl` is not possible:
+
+* `DifferentialEquations.jl`
+* `DiffEqBiological.jl`
+* `HDF5.jl`
+* `JLD.jl`
