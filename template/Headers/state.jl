@@ -33,12 +33,19 @@ mutable struct ChmState
 
     # species concentrations array
     # (N, Z, Y, X) for a generic 3-D eulerian grid
-    species::Array{Float64, 4}
+    #
+    # However, Sundials solver is a Fortran interface and does not support @view
+    # which leads to the decision of a Array{Array{Float64, 1}, 3} structure
+    # which is essentially (Z, Y, X)(N), loop over ZYX to get N
+    # species::Array{Float64, 4}
+    species::Array{Array{Float64, 1}, 3}
 
     # Constructor function
     function ChmState(spclist::Dict{String, Int},NX=1,NY=1,NZ=1)
         nspecies = length(spclist)
-        new(nspecies,spclist,zeros(Float64,nspecies,NX,NY,NZ))
+        # species = zeros(Float64,nspecies,NX,NY,NZ) # 4-D species array or
+        species = [zeros(Float64, nspecies) for k=1:NZ, j=1:NY, i=1:NX] # memorder ZYX
+        new(nspecies,spclist,species)
     end
 end
 

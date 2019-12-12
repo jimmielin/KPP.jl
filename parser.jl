@@ -60,8 +60,20 @@ function gen_spc_declaration(spclist::Array{String, 1})
 
         registry_meta_spc *= "Dict(\"index\" => $index, \"name\" => \"$name\"), \n"
 
-        # initialize_kpp expects a species list
-        initialize_kpp_spc *= "addspecies!(jlkpp_mechanism, :$name)\n"
+        # initialize_kpp expects a species list for DiffBioEq driver
+        if driver == "DiffBioEq"
+            initialize_kpp_spc *= "addspecies!(jlkpp_mechanism, :$name)\n"
+        elseif driver == "Native"
+            # Instead, map species to a list like so
+            # O, O1D, O3, NO, NO2, M, O2 = u  # species
+            initialize_kpp_spc *= ", $name"
+        end
+    end
+
+    # Chop and process for Native driver
+    if driver == "Native"
+        initialize_kpp_spc *= " = u\r\n"
+        initialize_kpp_spc  = initialize_kpp_spc[3:end] # chop off the initial ", " (2c)
     end
 
     registry_spc *= ")\n"
@@ -80,12 +92,14 @@ function parsekcoeff(str::AbstractString)
     # Arrhenius equation
     # Params: TEMP
     rgx_ARR = r"ARR\(\s*(?<A0>[\d\.e\-\+]+)\s*,\s*(?<B0>[\d\.e\-\+]+)\s*,\s*(?<C0>[\d\.e\-\+]+)\s*\)"
-    tpl_ARR = s"((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>))"
+    tpl_ARR = s"jlkpp_ARR(TEMP, \g<A0>, \g<B0>, \g<C0>)"
+    # tpl_ARR = s"((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>))"
 
     # Simplified Arrhenius, with two arguments
     # Params: TEMP
     rgx_ARR2 = r"ARR2\(\s*(?<A0>[\d\.e\-\+]+)\s*,\s*(?<B0>[\d\.e\-\+]+)\)"
-    tpl_ARR2 = s"((\g<A0>) * exp((\g<B0>)/TEMP))"
+    tpl_ARR2 = s"jlkpp_ARR2(TEMP, \g<A0>, \g<B0>)"
+    # tpl_ARR2 = s"((\g<A0>) * exp((\g<B0>)/TEMP))"
 
     # EP2
     # K0 = (:A0) * exp(-(:C0)/TEMP)
@@ -93,20 +107,23 @@ function parsekcoeff(str::AbstractString)
     # K3 = (:A3) * exp(-(:C3)/TEMP) * 1.0e6 * CFACTOR
     # Params: TEMP, CFACTOR
     rgx_EP2 = r"EP2\(\s*(?<A0>[\d\.e\-\+]+)\s*,\s*(?<C0>[\d\.e\-\+]+)\s*,\s*(?<A2>[\d\.e\-\+]+)\s*,\s*(?<C2>[\d\.e\-\+]+)\s*,\s*(?<A3>[\d\.e\-\+]+)\s*,\s*(?<C3>[\d\.e\-\+]+)\s*\)"
-    tpl_EP2 = s"((\g<A0>) * exp(-(\g<C0>)/TEMP) + ((\g<A3>) * exp(-(\g<C3>)/TEMP) * 1.0e6 * CFACTOR)/(1.0 + ((\g<A3>) * exp(-(\g<C3>)/TEMP) * 1.0e6 * CFACTOR)/((\g<A2>) * exp(-(\g<C2>)/TEMP))))"
+    tpl_EP2 = s"jlkpp_EP2(TEMP, CFACTOR, \g<A0>, \g<C0>, \g<A2>, \g<C2>, \g<A3>, \g<C3>)"
+    # tpl_EP2 = s"((\g<A0>) * exp(-(\g<C0>)/TEMP) + ((\g<A3>) * exp(-(\g<C3>)/TEMP) * 1.0e6 * CFACTOR)/(1.0 + ((\g<A3>) * exp(-(\g<C3>)/TEMP) * 1.0e6 * CFACTOR)/((\g<A2>) * exp(-(\g<C2>)/TEMP))))"
 
     # EP3
     # K1 = (:A1) * exp(-(:C1)/TEMP)
     # K2 = (:A2) * exp(-(:C2)/TEMP)
     rgx_EP3 = r"EP3\(\s*(?<A1>[\d\.e\-\+]+)\s*,\s*(?<C1>[\d\.e\-\+]+)\s*,\s*(?<A2>[\d\.e\-\+]+)\s*,\s*(?<C2>[\d\.e\-\+]+)\s*\)"
-    tpl_EP3 = s"((\g<A1>) * exp(-(\g<C1>)/TEMP) + ((\g<A2>) * exp(-(\g<C2>)/TEMP)) * 1.0e6 * CFACTOR)"
+    tpl_EP3 = s"jlkpp_EP3(TEMP, CFACTOR, \g<A1>, \g<C1>, \g<A2>, \g<C2>)"
+    # tpl_EP3 = s"((\g<A1>) * exp(-(\g<C1>)/TEMP) + ((\g<A2>) * exp(-(\g<C2>)/TEMP)) * 1.0e6 * CFACTOR)"
 
     # FALL
     # K0 = (:A0) * exp(-(:B0)/TEMP) * (TEMP/300.0)^(:C0) * CFACTOR * 1.0e6
     # K1 = (:A1) * exp(-(:B1)/TEMP) * (TEMP/300.0)^(:C1)
     # K1' = ((:A0) * exp(-(:B0)/TEMP) * (TEMP/300.0)^(:C0) * CFACTOR * 1.0e6)/((:A1) * exp(-(:B1)/TEMP) * (TEMP/300.0)^(:C1))
     rgx_FALL = r"FALL\(\s*(?<A0>[\d\.e\-\+]+)\s*,\s*(?<B0>[\d\.e\-\+]+)\s*,\s*(?<C0>[\d\.e\-\+]+)\s*,\s*(?<A1>[\d\.e\-\+]+)\s*,\s*(?<B1>[\d\.e\-\+]+)\s*,\s*(?<C1>[\d\.e\-\+]+)\s*,\s*(?<CF>[\d\.e\-\+]+)\s*\)"
-    tpl_FALL = s"((((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/(1.0 + ((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/((\g<A1>) * exp(-(\g<B1>)/TEMP) * (TEMP/300.0)^(\g<C1>)))) * (\g<CF>)^(1.0/(1.0 + log10((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/((\g<A1>) * exp(-(\g<B1>)/TEMP) * (TEMP/300.0)^(\g<C1>)))^2))"
+    tpl_FALL = s"jlkpp_FALL(TEMP, CFACTOR, \g<A0>, \g<B0>, \g<C0>, \g<A1>, \g<B1>, \g<C1>, \g<CF>)"
+    # tpl_FALL = s"((((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/(1.0 + ((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/((\g<A1>) * exp(-(\g<B1>)/TEMP) * (TEMP/300.0)^(\g<C1>)))) * (\g<CF>)^(1.0/(1.0 + log10((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/((\g<A1>) * exp(-(\g<B1>)/TEMP) * (TEMP/300.0)^(\g<C1>)))^2))"
 
     # replace away, then tokenize
     str = replace(str, rgx_ARR => tpl_ARR)
@@ -114,28 +131,54 @@ function parsekcoeff(str::AbstractString)
     str = replace(str, rgx_EP2 => tpl_EP2)
     str = replace(str, rgx_EP3 => tpl_EP3)
     str = replace(str, rgx_FALL => tpl_FALL)
-    string(":(", str, ")")
+
+    if driver == "DiffBioEq"
+        string(":(", str, ")") # As meta-expression
+    elseif driver == "Native"
+        string("(", str, ")")
+    end
 end
 
-function readfile_eqn(spclist::Array{String, 1}, modelparams::Dict{String, Any})
+function readfile_eqn(spclist::Array{String, 1}, spcfixID::Array{Int, 1}, modelparams::Dict{String, Any})
     println("Begin parsing $mechanism.eqn...")
 
+    nspc = length(spclist)
+
     codeeqn = ""
+    prodloss_diag_kpp_eqn = "" # P/L diagnostics
 
     # TODO: Hardcoded parameters - fix later (TEMP, SUN, CFACTOR)
-    codeeqn *= "addparam!(jlkpp_mechanism, :SUN)\r\n"
-    codeeqn *= "addparam!(jlkpp_mechanism, :TEMP)\r\n"
-    codeeqn *= "addparam!(jlkpp_mechanism, :CFACTOR)\r\n"
+    if driver == "DiffBioEq"
+        codeeqn *= "addparam!(jlkpp_mechanism, :SUN)\r\n"
+        codeeqn *= "addparam!(jlkpp_mechanism, :TEMP)\r\n"
+        codeeqn *= "addparam!(jlkpp_mechanism, :CFACTOR)\r\n"
+    elseif driver == "Native"
+        codeeqn *= "SUN, TEMP, CFACTOR = param\r\n"
+        prodloss_diag_kpp_eqn *= "SUN, TEMP, CFACTOR = param\r\n"
+    end
 
     rxn_count = 0
+
+    # If we are in the "Native" driver, we need to keep track of the prod, loss and rates manually
+    # This is through parsing equations, reading stoiochrometric coeffs, and stuff...
+    # We store string representations of: net change, prod and loss, by species index,
+    # in three arrays organized by SpcID => String
+    if driver == "Native"
+        netrates = ["du[$i] = 0" for i in 1:nspc]
+        prod     = ["prod[$i] = 0" for i in 1:nspc]
+        loss     = ["loss[$i] = 0" for i in 1:nspc]
+        # append netrates, prod, loss by space, sign, ratecoef, spc, myspc
+        @show typeof(netrates)
+    end
 
     # Since there may be line breaks in between equations this file is opened differently
     # and not read by line (.eqn)
 
     # {\d+}\s*(?<reaction>[a-zA-Z0\d][a-zA-Z0\d\s\+\=\.\_]*)\s*:\s*(?<rate>[^;]*);   version 1, hplin, 10/18/19
     rgx_equation = r"[<{][rR\d]+[}>]\s*(?<reaction>[a-zA-Z0\d][a-zA-Z0\d\s\+\=\.\_]*)\s*:\s*(?<rate>[^;]*);"
+    rgx_coef     = r"(?<coef>[\d\.]+)?\s*(?<chm>[a-zA-Z\_\d]+)"
 
-    eqnio = open("./inputs/$mechanism.eqn", "r")
+    eqnio  = open("./inputs/$mechanism.eqn", "r")
     eqnstr = read(eqnio, String)
 
     for m in eachmatch(rgx_equation, eqnstr)
@@ -147,7 +190,9 @@ function readfile_eqn(spclist::Array{String, 1}, modelparams::Dict{String, Any})
         rxn = replace(rxn, r"[\t\n\r]" => "") # remove outstanding whitespace
         rxn = replace(rxn, r"  +" => " ") # remove more than 2 spaces
         rxn = replace(rxn, "=" => "-->")
-        rxn = ":($rxn)" # enclose in statement
+        if driver == "DiffBioEq"
+            rxn = ":($rxn)" # enclose in statement
+        end
 
         # parse the rate coefficients
         coef = parsekcoeff(m[:rate])
@@ -155,8 +200,96 @@ function readfile_eqn(spclist::Array{String, 1}, modelparams::Dict{String, Any})
         # write the code...
         # println("Eqn#$rxn_count : $rxn @ $coef")
         # addreaction!(small_strato, :(2.643e-10*SUN*SUN*SUN), :(O2 --> 2O)) # photol
-        codeeqn *= "addreaction!(jlkpp_mechanism, $coef, $rxn)\r\n"
+        if driver == "DiffBioEq"
+            codeeqn *= "addreaction!(jlkpp_mechanism, $coef, $rxn)\r\n"
+        elseif driver == "Native"
+            # Further diagnosis of the system is necessary...
+            # append netrates, prod, loss by space, sign, ratecoef, spc, myspc
+
+            # Parse this equation further...
+            # rxn: doesn't get more complicated than
+            # MEK + OH --> 0.37RO2_R + 0.042RO2_N + 0.616R2O2+ 0.492CCO_O2 + 0.096RCO_O2 + 0.115HCHO + 0.482CCHO + 0.37RCHO
+            reactants, products = strip.(split(rxn, "-->"))
+            reactants = strip.(split(reactants, "+"))
+            products = strip.(split(products, "+"))
+            rate_expr = "(" * coef * ")"
+            for x in reactants
+                # Build the rate. match using
+                # (?<coef>[\d\.]+)?\s*(?<chm>[a-zA-Z\_\d]+)        version 1, hplin, 11/9/2019
+                rm = match(rgx_coef, x)
+                rcoef = (rm[:coef] == nothing ? 1.0 : parse(Float64, rm[:coef]))
+                # Seriously, this is a very stupid construct of indexof or anything for that matter.
+                # CartesianIndex? Why reinvent the Tuple?
+                ridx = findfirst(isequal(rm[:chm]), spclist)
+                if ridx == nothing
+                    error("Fatal parser error at equation ", rxn, " -- could not find species ", rm[:chm])
+                end
+                # ridx = ridx[2]
+                rspc = rm[:chm]
+
+                # Check passed, can build rate expression
+                if rcoef == 1
+                    rate_expr *= "*" * rspc
+                else
+                    rate_expr *= "*(" * rspc * "^$rcoef)"
+                end
+            end
+
+            # Now with the complete rate expression build the loss and prod...
+            for x in reactants
+                # Build the loss and rxn rate.
+                rm = match(rgx_coef, x)
+                rcoef = (rm[:coef] == nothing ? 1 : parse(Float64, rm[:coef]))
+                ridx = findfirst(isequal(rm[:chm]), spclist)
+                if ridx == nothing
+                    error("Fatal parser error at equation ", rxn, " -- could not find species ", rm[:chm])
+                end
+                # ridx = ridx[2]
+                rspc = rm[:chm]
+
+                # Check if fixed species... in spcfixID
+                if findfirst(isequal(ridx), spcfixID) != nothing
+                    continue
+                end
+
+                # Build the loss expression and du[]
+                netrates[ridx] *= " - $rcoef * $rate_expr"
+                loss[ridx]     *= " + $rcoef * $rate_expr"
+            end
+
+            # Build prod
+            for x in products
+                # Build the loss and rxn rate.
+                rm = match(rgx_coef, x)
+                rcoef = (rm[:coef] == nothing ? 1 : parse(Float64, rm[:coef]))
+                ridx = findfirst(isequal(rm[:chm]), spclist)
+                if ridx == nothing
+                    error("Fatal parser error at equation ", rxn, " -- could not find species ", rm[:chm])
+                end
+                # ridx = ridx[2]
+                rspc = rm[:chm]
+
+                # Check if fixed species... in spcfixID
+                if findfirst(isequal(ridx), spcfixID) != nothing
+                    continue
+                end
+
+                # Build the loss expression and du[]
+                netrates[ridx] *= " + $rcoef * $rate_expr"
+                prod[ridx]     *= " + $rcoef * $rate_expr"
+            end
+        end
     end
+
+    codeeqn *= join(netrates, "\r\n") * "\r\n"
+    prodloss_diag_kpp_eqn *= join(prod, "\r\n") * "\r\n\r\n"
+    prodloss_diag_kpp_eqn *= join(loss, "\r\n") * "\r\n"
+
+    # For cleaner code we can remove the initial "= 0 +" or "= 0 -" if they exist
+    codeeqn = replace(codeeqn, "= 0 +" => "=")
+    codeeqn = replace(codeeqn, "= 0 -" => "= -")
+    prodloss_diag_kpp_eqn = replace(prodloss_diag_kpp_eqn, "= 0 +" => "=")
+    prodloss_diag_kpp_eqn = replace(prodloss_diag_kpp_eqn, "= 0 -" => "= -")
 
     modelparams["reactions"] = rxn_count
 
@@ -164,7 +297,7 @@ function readfile_eqn(spclist::Array{String, 1}, modelparams::Dict{String, Any})
 
     # print(eqnstr)
     close(eqnio)
-    codeeqn
+    codeeqn, prodloss_diag_kpp_eqn
 end
 
 """
@@ -230,13 +363,18 @@ end
 
 function gen_ic(spclist::Array{String, 1}, spcfixID::Array{Int, 1}, spcIC::Array{Float64, 1}, modelparams::Dict{String, Any})
     registry_default_ic = "const jlkpp_bg_ic = Float64["
-    kludge_fix_fixed_species = ""
+    kludge_fix_fixed_species = "\n"
 
     # Loop through species
     for (index, name) in enumerate(spclist)
         registry_default_ic *= string(spcIC[index], ", ")
-        if index in spcfixID
-            kludge_fix_fixed_species *= string("chem_species[$index,i,j,k] = ", spcIC[index], "\n")
+
+        if driver == "DiffBioEq"
+            # The "Native" driver does not need this hack but DiffBioEq does because
+            # it cannot "fix" a species in time
+            if index in spcfixID
+                kludge_fix_fixed_species *= string("            chem_species[k,j,i][$index] = ", spcIC[index], "\n")
+            end
         end
     end
 

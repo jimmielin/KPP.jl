@@ -1,6 +1,6 @@
 # KPP.jl
 
-KPP.jl is a KPP (Kinetics PreProcessor)-compatible chemical kinetics model code generator for Julia. It interfaces with `DifferentialEquations.jl` and the `DiffEqBiological.jl` to import mass-action kinetics equation descriptions to generate time-stepping models solved by the broader numerical computing infrastructure provided by Julia.
+KPP.jl is a KPP (Kinetics PreProcessor)-compatible chemical kinetics model code generator for Julia. It interfaces with `DifferentialEquations.jl` and *optionally* the `DiffEqBiological.jl` to import mass-action kinetics equation descriptions to generate time-stepping models solved by the broader numerical computing infrastructure provided by Julia.
 
 This package aims to provide KPP-like compatibility, in the sense that *pre-processing* for species and equations are provided and a model code abstracting the ODE generation, solving and time-stepping is generated according to descriptions in a format compatible with the original Kinetics PreProcessor (KPP), which generates FORTRAN, C and MATLAB code. This project is a **clean re-implementation** of KPP with no original code and no affiliation with the original authors, who may be cited below:
 
@@ -9,6 +9,20 @@ This package aims to provide KPP-like compatibility, in the sense that *pre-proc
 Not all features by KPP are supported and model code generated adheres to Julia standards, given KPP is more than a dozen years old. Please see the "Deprecated" section for details.
 
 `KPP.jl` is developed by Haipeng Lin at `hplin as seas dot harvard dot edu` originally for the MIT 18.337 final project.
+
+## Drivers
+`KPP.jl` provides multiple "driver" packages enabling differing kinds of functionality. By default, it provides a simple `DiffEqBiological.jl`-based driver, `DiffBioEq`, which creates the reaction network using said package. KPP.jl is essentially a parser in this case.
+
+For high performance applications `KPP.jl` incorporates the `Native` driver, which builds the species array manually and aims to support advanced developments in solving chemical equations specific to atmospheric chemistry:
+* An optimized, pre-built Jacobian using the `ModelingToolkit.generate_jacobian` to take the symbolic Jacobian
+* **Diagnostics:** Production/Loss for species at each time-step
+* Adaptive approximations for reducing the complexity of the chemical mechanism, based on:
+> Santillana M., P. Le Sager, D. J. Jacob, and M. P. Brenner, An adaptive reduction algorithm for efficient chemical calculations in global atmospheric chemistry models. Atmos. Environ., 44, 4426-4431, 2010
+
+and possibly in the future an optimization as described in:
+
+> Shen, L., D.J. Jacob, M. Santillana, X. Wang, and W. Chen, An adaptive method for speeding up the numerical integration of chemical mechanisms in atmospheric chemistry models: application to GEOS-Chem version 12.0.0, Geophys. Model Dev. Discuss., https://doi.org/10.5194/gmd-2019-2792019, in review, 2019.
+
 
 ## Feature description
 TBD

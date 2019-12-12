@@ -1,6 +1,14 @@
 # Configure here:
-const mechanism = "small_strato"
+const mechanism = "saprc99"
 const mechanism_safe = mechanism
+
+# Choose the driver to use: DiffBioEq or Native (ODE constructed from scratch)
+const driver = "Native"
+
+# Enable adaptive optimizer? This is an implementation of the adaptive reduce
+# algorithm described by Santillana et al., 2010.
+# Only compatible with the "Native" driver
+const incl_optimize_adapt = true
 
 # NO USER CONFIGURABLE PARAMETERS BELOW
 include("parser.jl")
