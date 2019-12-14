@@ -49,6 +49,7 @@ function generatemodel()
     #   TIMESTEP_PARAM (in jlkpp_Timestep)
     #   TIMESTEP_AFTER_PARAM***
     #   TIMESTEP_AFTER_SOLVE
+    #   TIMESTEP_SPC_LOOP_COND_LEFT, TIMESTEP_SPC_LOOP_COND_RIGHT (usually end)
     # KPP LAYER: Headers/registry.jl
     #   REGISTRY_SPCLIST
     #   REGISTRY_DEFAULT_IC (this is passed as jlkpp_ic to INITIAL_CONDITIONS)
@@ -60,6 +61,8 @@ function generatemodel()
     initialize_kpp_spc = ""
     initialize_kpp_eqn = ""
     timestep_param = ""
+    timestep_spc_loop_cond_left = ""
+    timestep_spc_loop_cond_right = ""
 
     registry_spclist = ""
     registry_default_ic = ""
@@ -91,13 +94,20 @@ addodes!(jlkpp_mechanism)
         # Adaptive reduction (Santillana et al., 2010)
         # Add extra code to zero out changes for the "fixed" slow species
         if incl_optimize_adapt == true
-            initialize_kpp_eqn *= """
-    # Adaptive reduction: slow species set rate of change to 0; concentrations
-    # will be manually updated later.
-    for spc in 1:length(u)
-        jlkpp_adapt_slow[spc] && (du[spc] = 0)
-    end
-"""
+#             initialize_kpp_eqn *= """
+#     # Adaptive reduction: slow species set rate of change to 0; concentrations
+#     # will be manually updated later.
+#     for spc in 1:length(u)
+#         jlkpp_adapt_slow[spc] && (du[spc] = 0)
+#     end
+# """
+
+            # Avoid the compute in du by using ternary operators -
+            # this is experimental for the sake of benchmarking
+            initialize_kpp_eqn = replace(initialize_kpp_eqn, r"du\[(?<id>\d+)\] = (?<expr>.*)" => s"du[\g<id>] = jlkpp_adapt_slow[\g<id>] ? 0 : \g<expr>")
+
+            timestep_spc_loop_cond_left = "if jlkpp_adapt_slow[spc] == false"
+            timestep_spc_loop_cond_right = "end"
         end
 
         # Build the final KPP block code
@@ -122,7 +132,7 @@ end
     # For DiffBioEq its just an include.
     # For Native usually there are optimization options, etc. you can use
     setup_extra_declares = ""
-    setup_extra_declares_kpp = ""
+    setup_extra_declares_kpp = "const jlkpp_nspecies = " * string(modelparams["species"]) * "\n"
     generate_oprob = ""
     if driver == "DiffBioEq"
         setup_extra_declares *= "using DiffEqBiological\n"
@@ -131,7 +141,7 @@ end
 
         # generate_oprob *= "jlkpp_oprob = jlkpp_Compile(jlkpp_mechanism, @view(chem_species[:,1,1,1]))"
         # @view is incompatble with SUNDIALS solver
-        generate_oprob *= "jlkpp_oprob = jlkpp_Compile(jlkpp_mechanism_t!, chem_species[1,1,1])"
+        generate_oprob *= "jlkpp_oprob = jlkpp_Compile(jlkpp_mechanism, chem_species[1,1,1])"
     elseif driver == "Native"
         setup_extra_declares *= "# KPP.jl Native Driver: Use precomputed Jacobian?\n"
         setup_extra_declares *= "const jlkpp_prejac = true\n"
@@ -143,7 +153,7 @@ end
     setup_extra_declares *= "using Sundials\n"
 
     setup_extra_declares *= "# KPP.jl: Time stepping method. 'remake' remakes ODE problem, 'interfaced' uses the DiffEq Integrator interface.\n"
-    setup_extra_declares *= "const jlkpp_stepmethod = 'remake'\n"
+    setup_extra_declares *= "const jlkpp_stepmethod = \"remake\"\n"
 
     # Model parameters write into main.jl as necessary
     setup_timesteps *= string("# These timesteps are set here by KPP.jl for convenience. If you are building a model, you should be able to read these from a configuration file.\n")
@@ -157,7 +167,7 @@ end
     kpp_compile = """
     function jlkpp_Compile(rs::AbstractReactionNetwork, u_scratch::AbstractArray{Float64, 1})::ODEProblem
         # println("KPP.jl: Running ODE solver for type specialization")
-        ODEProblem(rs, u_scratch, (0.0, 600.0), t -> (0, 300.0, 2.4476e13))
+        ODEProblem(rs, u_scratch, (0.0, 600.0), (0, 300.0, 2.4476e13))
         # solve(oprob, alg_hints=[:stiff], dense=false, save_on=false, calck=false)
         # println("KPP.jl: Finished")
         # oprob # Return the ODEProblem
@@ -210,7 +220,11 @@ end
     end
 
     timestep_param *= "    # SUN, TEMP, CFACTOR\n"
-    timestep_param *= string("    p = t -> (jlkpp_SUN(t), T_chm, ", modelparams["CFACTOR"], timestep_param_extra_code, ")\n")
+    if driver == "Native"
+        timestep_param *= string("    p = t -> (jlkpp_SUN(t), T_chm, ", modelparams["CFACTOR"], timestep_param_extra_code, ")\n")
+    else
+        timestep_param *= string("    p = (jlkpp_SUN(t), T_chm, ", modelparams["CFACTOR"], timestep_param_extra_code, ")\n")
+    end
 
     # ----------------------- END PREP ------------------------- #
 

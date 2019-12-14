@@ -93,13 +93,11 @@ function parsekcoeff(str::AbstractString)
     # Params: TEMP
     rgx_ARR = r"ARR\(\s*(?<A0>[\d\.e\-\+]+)\s*,\s*(?<B0>[\d\.e\-\+]+)\s*,\s*(?<C0>[\d\.e\-\+]+)\s*\)"
     tpl_ARR = s"jlkpp_ARR(TEMP, \g<A0>, \g<B0>, \g<C0>)"
-    # tpl_ARR = s"((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>))"
 
     # Simplified Arrhenius, with two arguments
     # Params: TEMP
     rgx_ARR2 = r"ARR2\(\s*(?<A0>[\d\.e\-\+]+)\s*,\s*(?<B0>[\d\.e\-\+]+)\)"
     tpl_ARR2 = s"jlkpp_ARR2(TEMP, \g<A0>, \g<B0>)"
-    # tpl_ARR2 = s"((\g<A0>) * exp((\g<B0>)/TEMP))"
 
     # EP2
     # K0 = (:A0) * exp(-(:C0)/TEMP)
@@ -108,14 +106,12 @@ function parsekcoeff(str::AbstractString)
     # Params: TEMP, CFACTOR
     rgx_EP2 = r"EP2\(\s*(?<A0>[\d\.e\-\+]+)\s*,\s*(?<C0>[\d\.e\-\+]+)\s*,\s*(?<A2>[\d\.e\-\+]+)\s*,\s*(?<C2>[\d\.e\-\+]+)\s*,\s*(?<A3>[\d\.e\-\+]+)\s*,\s*(?<C3>[\d\.e\-\+]+)\s*\)"
     tpl_EP2 = s"jlkpp_EP2(TEMP, CFACTOR, \g<A0>, \g<C0>, \g<A2>, \g<C2>, \g<A3>, \g<C3>)"
-    # tpl_EP2 = s"((\g<A0>) * exp(-(\g<C0>)/TEMP) + ((\g<A3>) * exp(-(\g<C3>)/TEMP) * 1.0e6 * CFACTOR)/(1.0 + ((\g<A3>) * exp(-(\g<C3>)/TEMP) * 1.0e6 * CFACTOR)/((\g<A2>) * exp(-(\g<C2>)/TEMP))))"
 
     # EP3
     # K1 = (:A1) * exp(-(:C1)/TEMP)
     # K2 = (:A2) * exp(-(:C2)/TEMP)
     rgx_EP3 = r"EP3\(\s*(?<A1>[\d\.e\-\+]+)\s*,\s*(?<C1>[\d\.e\-\+]+)\s*,\s*(?<A2>[\d\.e\-\+]+)\s*,\s*(?<C2>[\d\.e\-\+]+)\s*\)"
     tpl_EP3 = s"jlkpp_EP3(TEMP, CFACTOR, \g<A1>, \g<C1>, \g<A2>, \g<C2>)"
-    # tpl_EP3 = s"((\g<A1>) * exp(-(\g<C1>)/TEMP) + ((\g<A2>) * exp(-(\g<C2>)/TEMP)) * 1.0e6 * CFACTOR)"
 
     # FALL
     # K0 = (:A0) * exp(-(:B0)/TEMP) * (TEMP/300.0)^(:C0) * CFACTOR * 1.0e6
@@ -123,7 +119,15 @@ function parsekcoeff(str::AbstractString)
     # K1' = ((:A0) * exp(-(:B0)/TEMP) * (TEMP/300.0)^(:C0) * CFACTOR * 1.0e6)/((:A1) * exp(-(:B1)/TEMP) * (TEMP/300.0)^(:C1))
     rgx_FALL = r"FALL\(\s*(?<A0>[\d\.e\-\+]+)\s*,\s*(?<B0>[\d\.e\-\+]+)\s*,\s*(?<C0>[\d\.e\-\+]+)\s*,\s*(?<A1>[\d\.e\-\+]+)\s*,\s*(?<B1>[\d\.e\-\+]+)\s*,\s*(?<C1>[\d\.e\-\+]+)\s*,\s*(?<CF>[\d\.e\-\+]+)\s*\)"
     tpl_FALL = s"jlkpp_FALL(TEMP, CFACTOR, \g<A0>, \g<B0>, \g<C0>, \g<A1>, \g<B1>, \g<C1>, \g<CF>)"
-    # tpl_FALL = s"((((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/(1.0 + ((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/((\g<A1>) * exp(-(\g<B1>)/TEMP) * (TEMP/300.0)^(\g<C1>)))) * (\g<CF>)^(1.0/(1.0 + log10((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/((\g<A1>) * exp(-(\g<B1>)/TEMP) * (TEMP/300.0)^(\g<C1>)))^2))"
+
+    if driver == "DiffBioEq"
+        tpl_ARR = s"((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>))"
+        tpl_ARR2 = s"((\g<A0>) * exp((\g<B0>)/TEMP))"
+        tpl_EP2 = s"((\g<A0>) * exp(-(\g<C0>)/TEMP) + ((\g<A3>) * exp(-(\g<C3>)/TEMP) * 1.0e6 * CFACTOR)/(1.0 + ((\g<A3>) * exp(-(\g<C3>)/TEMP) * 1.0e6 * CFACTOR)/((\g<A2>) * exp(-(\g<C2>)/TEMP))))"
+        tpl_EP3 = s"((\g<A1>) * exp(-(\g<C1>)/TEMP) + ((\g<A2>) * exp(-(\g<C2>)/TEMP)) * 1.0e6 * CFACTOR)"
+        tpl_FALL = s"((((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/(1.0 + ((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/((\g<A1>) * exp(-(\g<B1>)/TEMP) * (TEMP/300.0)^(\g<C1>)))) * (\g<CF>)^(1.0/(1.0 + log10((\g<A0>) * exp(-(\g<B0>)/TEMP) * (TEMP/300.0)^(\g<C0>) * CFACTOR * 1.0e6)/((\g<A1>) * exp(-(\g<B1>)/TEMP) * (TEMP/300.0)^(\g<C1>)))^2))"
+        # FIXME HACK: DiffBioEq has problems interpolating functions so we have to use the old way...
+    end
 
     # replace away, then tokenize
     str = replace(str, rgx_ARR => tpl_ARR)
@@ -133,7 +137,7 @@ function parsekcoeff(str::AbstractString)
     str = replace(str, rgx_FALL => tpl_FALL)
 
     if driver == "DiffBioEq"
-        string(":(", str, ")") # As meta-expression
+        string(":(", str, ")")
     elseif driver == "Native"
         string("(", str, ")")
     end
@@ -278,18 +282,21 @@ function readfile_eqn(spclist::Array{String, 1}, spcfixID::Array{Int, 1}, modelp
                 netrates[ridx] *= " + $rcoef * $rate_expr"
                 prod[ridx]     *= " + $rcoef * $rate_expr"
             end
-        end
+        end # driver == "Native"
+    end # for each match
+
+    if driver == "Native"
+        # Build the ODE and Prod/Loss Diagn for the Native driver...
+        codeeqn *= join(netrates, "\r\n") * "\r\n"
+        prodloss_diag_kpp_eqn *= join(prod, "\r\n") * "\r\n\r\n"
+        prodloss_diag_kpp_eqn *= join(loss, "\r\n") * "\r\n"
+
+        # For cleaner code we can remove the initial "= 0 +" or "= 0 -" if they exist
+        codeeqn = replace(codeeqn, "= 0 +" => "=")
+        codeeqn = replace(codeeqn, "= 0 -" => "= -")
+        prodloss_diag_kpp_eqn = replace(prodloss_diag_kpp_eqn, "= 0 +" => "=")
+        prodloss_diag_kpp_eqn = replace(prodloss_diag_kpp_eqn, "= 0 -" => "= -")
     end
-
-    codeeqn *= join(netrates, "\r\n") * "\r\n"
-    prodloss_diag_kpp_eqn *= join(prod, "\r\n") * "\r\n\r\n"
-    prodloss_diag_kpp_eqn *= join(loss, "\r\n") * "\r\n"
-
-    # For cleaner code we can remove the initial "= 0 +" or "= 0 -" if they exist
-    codeeqn = replace(codeeqn, "= 0 +" => "=")
-    codeeqn = replace(codeeqn, "= 0 -" => "= -")
-    prodloss_diag_kpp_eqn = replace(prodloss_diag_kpp_eqn, "= 0 +" => "=")
-    prodloss_diag_kpp_eqn = replace(prodloss_diag_kpp_eqn, "= 0 -" => "= -")
 
     modelparams["reactions"] = rxn_count
 

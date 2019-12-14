@@ -9,7 +9,7 @@ from the original KPP specification file and imported into the registry
 into the given array, by grid box
 """
 function jlkpp_Initialize_Defaults(u::Array{Float64, 1})
-    @inbounds for spc in 1:length(jlkpp_bg_ic)
+    @inbounds for spc in 1:jlkpp_nspecies
         u[spc] = jlkpp_bg_ic[spc]
     end
 end
@@ -80,6 +80,13 @@ function jlkpp_Timestep!(
 
     # $TIMESTEP_AFTER_SOLVE$ #
 
+    # Update species concentrations as this is the mutating form.
+    # Allow hooks
+    for spc in 1:jlkpp_nspecies
+        # $TIMESTEP_SPC_LOOP_COND_LEFT$ #
+        u[spc] = _osol.u[end][spc]
+        # $TIMESTEP_SPC_LOOP_COND_RIGHT$ #
+    end
 end
 
 # $KPP_CODE_EXTRA$ #

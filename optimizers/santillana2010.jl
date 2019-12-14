@@ -18,7 +18,7 @@ function jlkpp_adapt_diagn(u::Array{Float64, 1}, t::Float64)
 
     # Outs
     _optim_slow_count = 0
-    for spc in 1:length(u)
+    for spc in 1:jlkpp_nspecies
         jlkpp_adapt_slow[spc] = (jlkpp_scratch_p[spc] < δ && jlkpp_scratch_l[spc] < δ)
         jlkpp_adapt_slow[spc] && (_optim_slow_count += 1)
     end
@@ -35,9 +35,21 @@ function jlkpp_adapt_slow!(u::Array{Float64, 1}, dt::Float64)
     # so we just assume ki* = Li/Ci, which is fair enough as most equations are like this.
 
     # We use the global scratchpad
-    for spc in 1:length(u)
-        if jlkpp_adapt_slow[spc] == true # is slow spc
-            u[spc] = (jlkpp_scratch_p[spc]/jlkpp_scratch_l[spc] + (1.0-jlkpp_scratch_p[spc])*exp(-jlkpp_scratch_l[spc]*dt/u[spc]))*u[spc]
+    for spc in 1:jlkpp_nspecies
+        if jlkpp_adapt_slow[spc] # is slow spc
+            if jlkpp_scratch_l[spc] != 0
+                # print("* jlkpp_adapt_slow! updating slow spc ", spc, " from ", u[spc])
+                # print(" p/l=", jlkpp_scratch_p[spc]/jlkpp_scratch_l[spc], " exp=", exp(-jlkpp_scratch_l[spc]*dt/u[spc]))
+                u[spc] = (jlkpp_scratch_p[spc]/jlkpp_scratch_l[spc] + (1.0-jlkpp_scratch_p[spc]/jlkpp_scratch_l[spc])*exp(-jlkpp_scratch_l[spc]*dt/u[spc]))*u[spc]
+                # println("-> to ", u[spc])
+            else
+                # print("* jlkpp_adapt_slow! updating slow spc ", spc, " from ", u[spc])
+                u[spc] = jlkpp_scratch_p[spc]*dt + u[spc]
+                # println("-> using linear method to ", u[spc])
+            end
+
+            # Never allow negative species conc
+            u[spc] < 0 && (u[spc] = 0)
         end
     end
 end
