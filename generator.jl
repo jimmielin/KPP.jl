@@ -167,7 +167,7 @@ end
     kpp_compile = """
     function jlkpp_Compile(rs::AbstractReactionNetwork, u_scratch::AbstractArray{Float64, 1})::ODEProblem
         # println("KPP.jl: Running ODE solver for type specialization")
-        ODEProblem(rs, u_scratch, (0.0, 600.0), (0, 300.0, 2.4476e13))
+        ODEProblem(rs, u_scratch, (0.0, 600.0), (0.0, 300.0, 2.4476e13))
         # solve(oprob, alg_hints=[:stiff], dense=false, save_on=false, calck=false)
         # println("KPP.jl: Finished")
         # oprob # Return the ODEProblem
@@ -176,7 +176,7 @@ end
     elseif driver == "Native"
     kpp_compile = """
     function jlkpp_Compile(f, u_scratch::AbstractArray{Float64, 1})::ODEProblem
-        ODEProblem(f, u_scratch, (0.0, 600.0), t -> (0, 300.0, 2.4476e13))
+        ODEProblem(f, u_scratch, (0.0, 600.0), t -> (0.0, 300.0, 2.4476e13))
         # solve(oprob, alg_hints=[:stiff], dense=false, save_on=false, calck=false)
         # println("KPP.jl: Finished")
     end
