@@ -27,6 +27,16 @@ Experimental features will also leverage `ModelingToolkit.generate_jacobian` to 
 ## Feature description
 TBD
 
+## Quick Start
+
+* `KPP.jl` is not a package, it is a pre-processor that generates full model code. Run-time building of the model is too slow.
+
+* To run, simply configure the scheme you want to use and other options in `./KPP.jl`. Input files are located in `./inputs/` and are in standard-KPP format, with `.def`, `.spc` and `.eqn` files.
+
+* Models are generated based on a template in `./template`. Ignore `./template_adv` for now.
+
+* In the generated model, `jlkpp_Model()` is the pseudo-main function of the model and can be edited freely. All chemical kinetics solver routines are in the generated model's `Core/kpp.jl`; species descriptions are in `Headers/registry.jl`. The main stepping function is `jlkpp_Timestep!`, a mutating form that is parallel-safe.
+
 ## Differences from legacy KPP-generated code
 Generated code is a full time-stepped model `jlkpp_MECHANISM_NAME` which performs time-stepping from start to end solving chemical kinetic equations step-by-step until completion.
 
